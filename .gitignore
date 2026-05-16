@@ -1,3 +1,22 @@
-tech/.env
-vless-credentials.txt
+# credentials / secrets
+*vless-credentials*
+*credentials*
+*.secret
+*.key
+*.pem
+
+# logs
 *.log
+logs/
+
+# temp files
+tmp/
+temp/
+*.tmp
+*.bak
+*~
+
+# editor / OS
+.DS_Store
+.vscode/
+.idea/

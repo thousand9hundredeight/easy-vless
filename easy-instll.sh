@@ -1,85 +1,50 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-#=============================================================================#
-#                               LOAD CONFIG                                   #
-#=============================================================================#
-
-REPO_ROOT="$(dirname "$0")"
-ENV_FILE="$REPO_ROOT/env"
-
-if [[ -f "$ENV_FILE" ]]; then
-  source "$ENV_FILE"
-else
-  echo "Config file env not found. Run from repo root."
-  exit 1
-fi
-
-export VLESS_SNI VLESS_INTERNAL_PORT VLESS_PUBLIC_PORT
-export CONFIG_DIR CONFIG_FILE CREDS_FILE
-export VLESS_USE_NGINX
-
-#=============================================================================#
-#                                EXECUTE                                      #
-#=============================================================================#
-
-./base.sh
-./vless.sh
-[[ "$VLESS_USE_NGINX" == "true" ]] && ./nginx.sh
-[[ "$VLESS_INSTALL_3X_UI" == "true" ]] && ./3x-ui.sh
-./vpnmon.sh
-
-#=============================================================================#
-#     		           UNIVERSAL INSTALLER                                #
-#=============================================================================#
-
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 NC='\033[0m'
 
 die() { echo -e "${RED}[ERR]${NC} $*" >&2; exit 1; }
 
 [[ $EUID -ne 0 ]] && die "Run as root"
 
-cd "$(dirname "$0")"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/.env"
 
-#=============================================================================#
-# 			       BASE SETUP                                     #
-#=============================================================================#
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
+else
+  die "Config file .env not found: $ENV_FILE"
+fi
+
 echo -e "${GREEN}=== 1. BASE SETUP ===${NC}"
-./setup-base.sh || die "Base setup failed"
+"$SCRIPT_DIR/base.sh" || die "Base setup failed"
 
-#=============================================================================#
-# 			    VLESS REALITY SETUP                               #
-#=============================================================================#
 echo -e "${GREEN}=== 2. VLESS REALITY SETUP ===${NC}"
-./setup-vless.sh || die "VLESS Reality setup failed"
+"$SCRIPT_DIR/vless.sh" || die "VLESS Reality setup failed"
 
-#=============================================================================#
-# 			       NGINX SETUP                                    #
-#=============================================================================#
-echo -e "${GREEN}=== 3. NGINX SETUP ===${NC}"
-./setup-nginx.sh || die "NGINX setup failed"
+if [[ "${VLESS_USE_NGINX:-false}" == "true" ]]; then
+  echo -e "${GREEN}=== 3. NGINX SETUP ===${NC}"
+  "$SCRIPT_DIR/nginx.sh" || die "NGINX setup failed"
+fi
 
-#=============================================================================#
-# 			         VPNMON                                       #
-#=============================================================================#
-echo -e "${GREEN}=== 4. VPNMON MONITORING ===${NC}"
-./setup-monitoring.sh || die "VPNMON setup failed"
+if [[ "${VLESS_INSTALL_3X_UI:-false}" == "true" ]]; then
+  echo -e "${GREEN}=== 4. 3X-UI SETUP ===${NC}"
+  "$SCRIPT_DIR/optional-3xui" || die "3X-UI setup failed"
+fi
 
-#=============================================================================#
-#				EXTRA TIPS                                    #
-#=============================================================================#
-echo -e "${GREEN}"
+echo -e "${GREEN}=== 5. VPNMON MONITORING ===${NC}"
+"$SCRIPT_DIR/vpnmon.sh" || die "VPNMON setup failed"
+
+echo
 echo "installation completed."
 echo "------------------------------------------------------------"
 echo "VLESS user credentials stored in:"
-echo "/root/vless-credentials.txt"
-echo ""
+echo "$CREDS_FILE"
+echo
 echo "Monitoring tool:"
 echo "vpnmon"
 echo "------------------------------------------------------------"
-echo -e "${NC}"
-
-exit 0

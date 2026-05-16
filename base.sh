@@ -1,62 +1,53 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ENV_FILE="$REPO_ROOT/env"
+[[ $EUID -ne 0 ]] && { echo "[ERR] Run as root"; exit 1; }
 
-if [[ -f "$ENV_FILE" ]]; then
-  source "$ENV_FILE"
-else
-  echo "env file not found; run from repo root"
-  exit 1
-fi
+bash <(curl -Ls https://raw.githubusercontent.com/MHSanaei/3x-ui/master/install.sh)
+root@happyaqua:~/easy-vless# cat base.sh
+#!/usr/bin/env bash
+set -euo pipefail
 
-RED='\\033[0;31m'
-GREEN='\\033[0;32m'
-NC='\\033[0m'
-
-die() { echo -e "${RED}[ERR]${NC} $*" >&2; exit 1; }
+die() { echo "[ERR] $*" >&2; exit 1; }
 
 [[ $EUID -ne 0 ]] && die "Run as root"
 
-#=============================================================================#
-#			          BASE!                                       #
-#=============================================================================#
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/.env"
 
-run_step() {
-  local title="$1"
-  shift
-  echo "[$(date +'%H:%M:%S')] $title"
-  if "$@"; then
-    echo "[$(date +'%H:%M:%S')] $title: OK"
-  else
-    echo "[$(date +'%H:%M:%S')] $title: ERROR"
-    exit 1
-  fi
-}
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
+else
+  die "env file not found: $ENV_FILE"
+fi
 
-# Updating #
-run_step "Updating apt package lists" apt-get update -qq
+apt-get update
 
-# Required packages #
-run_step "Installing required packages" bash -lc '
-  for pkg in ca-certificates curl wget unzip openssl ufw tmux htop figlet; do
-    dpkg -s "$pkg" >/dev/null 2>&1 || apt-get install -y -qq "$pkg"
-  done
-'
+apt-get install -y \
+  ca-certificates \
+  curl \
+  wget \
+  unzip \
+  openssl \
+  ufw \
+  tmux \
+  htop \
+  figlet
 
-# Docker #
-run_step "Installing Docker" bash -lc '
-  if ! command -v docker >/dev/null 2>&1; then
-    apt-get install -y -qq docker.io
-  fi
-  systemctl enable --now docker
-'
+if ! command -v docker >/dev/null 2>&1; then
+  apt-get install -y \
+    docker-ce \
+    docker-ce-cli \
+    containerd.io \
+    docker-buildx-plugin \
+    docker-compose-plugin
+fi
 
-# UFW #
-run_step "Configuring firewall" bash -lc "
-  ufw allow ssh >/dev/null 2>&1 || true
-  ufw --force enable >/dev/null 2>&1 || true
-"
+systemctl enable --now docker
+
+ufw allow ssh >/dev/null 2>&1 || true
+ufw --force enable >/dev/null 2>&1 || true
 
 echo "Base setup completed."
